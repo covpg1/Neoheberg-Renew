@@ -494,7 +494,7 @@ def should_notify(status):
 def build_report(status, note, title="NeoHeberg 续期报告"):
     bj = datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%d %H:%M")
     icon = {"renewed": "✅", "ok": "✔️", "started": "🔄", "failed": "❌"}[status]
-    lines = [f"<b>{html.escape(title)}</b>", f"🕐 {bj}（北京时间）", "", f"{icon} {html.escape(note)}"]
+    lines = [f"👤 账号：{html.escape(USER)}", f"📧 邮箱：uk@freenode.qzz.io", f"<b>{html.escape(title)}</b>", f"🕐 {bj}（北京时间）", "", f"{icon} {html.escape(note)}"]
     repo, run = os.environ.get("GITHUB_REPOSITORY"), os.environ.get("GITHUB_RUN_ID")
     if repo and run:
         server = os.environ.get("GITHUB_SERVER_URL", "https://github.com")
