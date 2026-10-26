@@ -60,6 +60,7 @@ jobs:
           TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
           # 推送策略（可选）：Variables 里设置 TG_NOTIFY = always(默认) / change / fail
           TG_NOTIFY: ${{ vars.TG_NOTIFY }}
+          TG_ACCOUNT_LABEL: ${{ vars.TG_ACCOUNT_LABEL }}
         run: python renew.py
 
       # 启动阶段就失败（装依赖出错等）时 renew.py 来不及推送，这里兜底通知一次
