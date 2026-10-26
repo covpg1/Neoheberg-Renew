@@ -498,7 +498,7 @@ def build_report(status, note, title="NeoHeberg 续期报告"):
       icon = {"renewed": "✅", "ok": "✔️", "started": "🔄", "failed": "❌"}[status]
 lines = [header, f"<b>{html.escape(title)}</b>", f"🕐 {bj} (北京时间)", "", f"{icon} {html.escape(note)}"]
     repo, run = os.environ.get("GITHUB_REPOSITORY"), os.environ.get("GITHUB_RUN_ID")
-    if repo and run:
+    epo and run:
         server = os.environ.get("GITHUB_SERVER_URL", "https://github.com")
         lines += ["", f'<a href="{server}/{repo}/actions/runs/{run}">查看运行日志</a>']
     return "\n".join(lines)
