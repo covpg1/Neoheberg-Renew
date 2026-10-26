@@ -66,7 +66,6 @@ PROXY_FAILED = (os.environ.get("PROXY_FAILED") or os.environ.get("GLOBAL_PROXY_F
 TG_TOKEN = os.environ.get("TG_BOT_TOKEN", "").strip()
 TG_CHAT = os.environ.get("TG_CHAT_ID", "").strip()
 TG_NOTIFY = (os.environ.get("TG_NOTIFY", "") or "always").strip().lower()  # always / change / fail
-TG_ACCOUNT_LABEL = os.environ.get("TG_ACCOUNT_LABEL", "").strip()
 
 ACC = {"user": USER, "password": PASSWORD, "vmid": VMID, "type": TYPE}  # 供下面的面板函数使用
 
@@ -494,14 +493,13 @@ def should_notify(status):
 
 def build_report(status, note, title="NeoHeberg 续期报告"):
     bj = datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%d %H:%M")
-      header = html.escape(TG_ACCOUNT_LABEL) if TG_ACCOUNT_LABEL else f"账号：{html.escape(USER)}"
-icon = {"renewed": "✅", "ok": "✔️", "started": "🔄", "failed": "❌"}[status]
-lines = [header, f"<b>{html.escape(title)}</b>", f"🕐 {bj} (北京时间)", "", f"{icon} {html.escape(note)}"]
-repo, run = os.environ.get("GITHUB_REPOSITORY"), os.environ.get("GITHUB_RUN_ID")
-if repo and run:
-      server = os.environ.get("GITHUB_SERVER_URL", "https://github.com")
-      lines += ["", f'<a href="{server}/{repo}/actions/runs/{run}">查看运行日志</a>']
-      return "\n".join(lines)
+    icon = {"renewed": "✅", "ok": "✔️", "started": "🔄", "failed": "❌"}[status]
+    lines = [f"👤 账号：{html.escape(USER)}", f"📧 邮箱：uk@freenode.qzz.io", f"<b>{html.escape(title)}</b>", f"🕐 {bj}（北京时间）", "", f"{icon} {html.escape(note)}"]
+    repo, run = os.environ.get("GITHUB_REPOSITORY"), os.environ.get("GITHUB_RUN_ID")
+    if repo and run:
+        server = os.environ.get("GITHUB_SERVER_URL", "https://github.com")
+        lines += ["", f'<a href="{server}/{repo}/actions/runs/{run}">查看运行日志</a>']
+    return "\n".join(lines)
 
 
 # ───────────────────────── 主流程 ─────────────────────────
