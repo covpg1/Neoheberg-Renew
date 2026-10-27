@@ -2,7 +2,7 @@ name: Neoheberg Renew
 
 on:
   schedule:
-    - cron: "0 2 * * *"     # 每天 UTC 02:00 触发，真检查由下面的 29 天门禁控制（cron 写不出 29 天间隔）
+    - cron: "0 2 * * *"     # 每天 UTC 02:00 触发，真检查由下面的 14 天门禁控制（cron 写不出严格的 14 天间隔）
   workflow_dispatch:         # 可在 Actions 页面手动触发
     inputs:
       force_renew:
@@ -26,30 +26,31 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # 29 天门禁：每天触发、这里卡间隔。last_check.txt 是上次真检查的时间
-      # （门禁跳过的运行不提交，不刷新锚点）。手动触发跳过门禁、立即真检查；
-      # 文件缺失或日期解析失败时默认放行（宁可多查一次，不漏查）。
-      - name: Gate (29-day interval)
+      # 14 天门禁：每天触发、这里卡间隔。last_check.txt 是上次真检查的时间
+      # （门禁跳过的运行不提交，不刷新锚点）。按 UTC 日期算间隔，恰好 14 天；
+      # 间隔等于续期窗口（14 天），任何周期都必有一次检查落在窗口内，不会漏检。
+      # 手动触发跳过门禁、立即真检查；文件缺失或日期解析失败时默认放行。
+      - name: Gate (14-day interval)
         id: gate
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "run_check=true" >> "$GITHUB_OUTPUT"
-            echo "手动触发，跳过 29 天门禁"
+            echo "手动触发，跳过 14 天门禁"
             exit 0
           fi
-          last=""
+          anchor_date=""
           if [ -f last_check.txt ]; then
-            last=$(grep -m1 '^last_check:' last_check.txt | sed 's/^last_check: *//; s/ UTC$//')
+            anchor_date=$(grep -m1 '^last_check:' last_check.txt | sed 's/^last_check: *//; s/ .*//')
           fi
-          last_epoch=$(date -d "$last" -u +%s 2>/dev/null || echo 0)
-          now_epoch=$(date -u +%s)
-          age_days=$(( (now_epoch - last_epoch) / 86400 ))
-          if [ "$age_days" -ge 29 ]; then
+          anchor_epoch=$(date -d "$anchor_date" -u +%s 2>/dev/null || echo 0)
+          today_epoch=$(date -d "$(date -u +%F)" -u +%s)
+          age_days=$(( (today_epoch - anchor_epoch) / 86400 ))
+          if [ "$age_days" -ge 14 ]; then
             echo "run_check=true" >> "$GITHUB_OUTPUT"
             echo "距上次真检查 ${age_days} 天，执行检查"
           else
             echo "run_check=false" >> "$GITHUB_OUTPUT"
-            echo "距上次真检查 ${age_days} 天，未满 29 天，跳过"
+            echo "距上次真检查 ${age_days} 天，未满 14 天，跳过"
           fi
 
       - uses: actions/setup-python@v5
@@ -114,8 +115,8 @@ jobs:
           if-no-files-found: ignore
 
       # 仓库保活：每次真检查（无论成功失败）都把检测时间写入 last_check.txt 并提交，
-      # 保证仓库每 29 天都有新提交，避免 GitHub 在 60 天无活动后停用定时任务。
-      # 该时间同时是 29 天门禁的锚点：门禁跳过的运行不提交，不刷新锚点。
+      # 保证仓库每 14 天都有新提交，避免 GitHub 在 60 天无活动后停用定时任务。
+      # 该时间同时是 14 天门禁的锚点：门禁跳过的运行不提交，不刷新锚点。
       - name: Keepalive (update last_check.txt)
         if: always() && steps.gate.outputs.run_check == 'true'
         env:
