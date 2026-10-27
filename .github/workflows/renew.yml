@@ -2,7 +2,7 @@ name: Neoheberg Renew
 
 on:
   schedule:
-    - cron: "0 2 * * 1"     # 每周一 UTC 02:00（北京时间 10:00）
+    - cron: "0 2 * * *"     # 每天 UTC 02:00 触发，真检查由下面的 29 天门禁控制（cron 写不出 29 天间隔）
   workflow_dispatch:         # 可在 Actions 页面手动触发
     inputs:
       force_renew:
@@ -26,6 +26,32 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # 29 天门禁：每天触发、这里卡间隔。last_check.txt 是上次真检查的时间
+      # （门禁跳过的运行不提交，不刷新锚点）。手动触发跳过门禁、立即真检查；
+      # 文件缺失或日期解析失败时默认放行（宁可多查一次，不漏查）。
+      - name: Gate (29-day interval)
+        id: gate
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "run_check=true" >> "$GITHUB_OUTPUT"
+            echo "手动触发，跳过 29 天门禁"
+            exit 0
+          fi
+          last=""
+          if [ -f last_check.txt ]; then
+            last=$(grep -m1 '^last_check:' last_check.txt | sed 's/^last_check: *//; s/ UTC$//')
+          fi
+          last_epoch=$(date -d "$last" -u +%s 2>/dev/null || echo 0)
+          now_epoch=$(date -u +%s)
+          age_days=$(( (now_epoch - last_epoch) / 86400 ))
+          if [ "$age_days" -ge 29 ]; then
+            echo "run_check=true" >> "$GITHUB_OUTPUT"
+            echo "距上次真检查 ${age_days} 天，执行检查"
+          else
+            echo "run_check=false" >> "$GITHUB_OUTPUT"
+            echo "距上次真检查 ${age_days} 天，未满 29 天，跳过"
+          fi
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -40,12 +66,14 @@ jobs:
       #   PROXY_SERVER 现成的代理地址，如 http://user:pass@host:port 或 socks5://host:port
       # 两者都配时 NODE_LINK 优先。配置了代理但不可用时，本次任务会取消，不会直连。
       - name: Setup proxy
+        if: steps.gate.outputs.run_check == 'true'
         env:
           NODE_LINK: ${{ secrets.NODE_LINK }}
           USER_PROXY: ${{ secrets.PROXY_SERVER }}
         run: python setup_proxy.py || echo "PROXY_FAILED=1" >> "$GITHUB_ENV"
 
       - name: Run renew script
+        if: steps.gate.outputs.run_check == 'true'
         id: renew
         env:
           # 账号（必填）
@@ -65,7 +93,7 @@ jobs:
 
       # 启动阶段就失败（装依赖出错等）时 renew.py 来不及推送，这里兜底通知一次
       - name: Notify Telegram (failed before renew)
-        if: failure() && steps.renew.outcome == 'skipped'
+        if: failure() && steps.renew.outcome == 'skipped' && steps.gate.outputs.run_check == 'true'
         env:
           TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
           TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
@@ -76,7 +104,7 @@ jobs:
             --data-urlencode "text=❌ NeoHeberg 续期任务在启动阶段失败：${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" || true
 
       - name: Upload debug files
-        if: failure()
+        if: failure() && steps.gate.outputs.run_check == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: debug
@@ -85,10 +113,11 @@ jobs:
             *.html
           if-no-files-found: ignore
 
-      # 仓库保活：每次运行（无论成功失败）都把检测时间写入 last_check.txt 并提交，
-      # 保证仓库每周都有新提交，避免 GitHub 在 60 天无活动后停用定时任务。
+      # 仓库保活：每次真检查（无论成功失败）都把检测时间写入 last_check.txt 并提交，
+      # 保证仓库每 29 天都有新提交，避免 GitHub 在 60 天无活动后停用定时任务。
+      # 该时间同时是 29 天门禁的锚点：门禁跳过的运行不提交，不刷新锚点。
       - name: Keepalive (update last_check.txt)
-        if: always()
+        if: always() && steps.gate.outputs.run_check == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           JOB_STATUS: ${{ job.status }}
